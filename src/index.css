@@ -1,0 +1,53 @@
+/* Font names weren't specified — using Fraunces (display) + IBM Plex Sans (body)
+   as a placeholder pairing. Swap the @import and --font-* tokens below if you
+   had specific fonts in mind. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", ui-serif, serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, sans-serif;
+
+  --color-bg: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef1f7;
+  --color-line: #d9deea;
+  --color-ink: #1b2235;
+  --color-muted: #69738b;
+  --color-amber: #c77a12;
+  --color-teal: #24865d;
+  --color-violet: #626bb2;
+  --color-flag: #c6433a;
+}
+
+:root {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+  --color-bg: #14182b;
+  --color-surface: #1e2440;
+  --color-surface-2: #262c4e;
+  --color-line: #333b63;
+  --color-ink: #edeae0;
+  --color-muted: #8b92b8;
+  --color-amber: #e8a33d;
+  --color-teal: #4fb286;
+  --color-violet: #8188c9;
+  --color-flag: #d8574a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 180ms ease, color 180ms ease;
+}
