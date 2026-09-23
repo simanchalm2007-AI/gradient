@@ -106,7 +106,7 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
         </div>
       </div>
 
-      <footer className="mt-8 text-center text-xs text-muted">Data stays on this device only.</footer>
+      <footer className="mt-8 text-center text-xs text-muted">{userEmail ? "Your signed-in data syncs securely across devices." : "Data stays on this device only."}</footer>
     </div>
   );
 }

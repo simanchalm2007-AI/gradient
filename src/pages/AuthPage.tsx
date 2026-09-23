@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 
 export function AuthPage({ onLocalPreview }: { onLocalPreview: () => void }) {
@@ -7,6 +7,12 @@ export function AuthPage({ onLocalPreview }: { onLocalPreview: () => void }) {
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("gradient_theme") === "dark");
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("gradient_theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -36,10 +42,16 @@ export function AuthPage({ onLocalPreview }: { onLocalPreview: () => void }) {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-5 py-10">
-      <section className="w-full max-w-md rounded-2xl border border-line bg-surface p-7 shadow-sm">
+    <main className="min-h-screen px-5 py-8">
+      <nav className="mx-auto flex max-w-md items-center justify-between border-b border-line pb-4">
+        <span className="font-display text-xl font-semibold tracking-tight">Gradient</span>
+        <button type="button" onClick={() => setDarkMode((current) => !current)} aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`} className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-ink transition-colors hover:border-muted">
+          <span aria-hidden="true">{darkMode ? "☀" : "☾"}</span>
+          {darkMode ? "Light mode" : "Dark mode"}
+        </button>
+      </nav>
+      <section className="mx-auto mt-12 w-full max-w-md rounded-2xl border border-line bg-surface p-7 shadow-sm">
         <div className="mb-7">
-          <div className="font-display text-2xl font-semibold">Gradient</div>
           <h1 className="mt-6 font-display text-3xl font-semibold">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
           <p className="mt-2 text-sm text-muted">Sign in to access your schedule on every device.</p>
         </div>
