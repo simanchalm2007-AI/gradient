@@ -19,7 +19,11 @@ export function AuthPage({ onLocalPreview }: { onLocalPreview: () => void }) {
     try {
       const result = mode === "login"
         ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: window.location.origin },
+          });
       if (result.error) setMessage(result.error.message);
       else if (mode === "signup") setMessage("Account created. Check your email to confirm it, then log in.");
     } catch {
