@@ -16,12 +16,19 @@ export function AuthPage({ onLocalPreview }: { onLocalPreview: () => void }) {
     }
     setBusy(true);
     setMessage("");
-    const result = mode === "login"
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
-    setBusy(false);
-    if (result.error) setMessage(result.error.message);
-    else if (mode === "signup") setMessage("Account created. Check your email to confirm it, then log in.");
+    try {
+      const result = mode === "login"
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password });
+      if (result.error) setMessage(result.error.message);
+      else if (mode === "signup") setMessage("Account created. Check your email to confirm it, then log in.");
+    } catch {
+      setMessage(
+        "Unable to reach Supabase. In Netlify, verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY, then redeploy the site.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
