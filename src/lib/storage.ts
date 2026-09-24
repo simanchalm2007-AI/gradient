@@ -3,8 +3,16 @@ import type { DayRecord, ScheduleBlock, CheckIn, Reminder, ImportedEntry } from 
 import { supabase } from "./supabase";
 
 const DB_KEY = "gradient_db";
+const BACKUP_KEY = "gradient_internal_backups";
+const MAX_BACKUPS = 20;
 
 type DB = Record<string, DayRecord>;
+interface InternalBackup {
+  id: string;
+  createdAt: string;
+  reason: string;
+  db: DB;
+}
 
 function localDayKey(date = new Date()): string {
   const year = date.getFullYear();
@@ -24,6 +32,16 @@ function loadDB(): DB {
 
 function saveDB(db: DB): void {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+function saveInternalBackup(db: DB, reason: string): void {
+  const raw = localStorage.getItem(BACKUP_KEY);
+  const backups = raw ? JSON.parse(raw) as InternalBackup[] : [];
+  const next: InternalBackup[] = [
+    { id: crypto.randomUUID(), createdAt: new Date().toISOString(), reason, db },
+    ...backups,
+  ].slice(0, MAX_BACKUPS);
+  localStorage.setItem(BACKUP_KEY, JSON.stringify(next));
 }
 
 function emptyDay(): DayRecord {
@@ -61,6 +79,7 @@ export function useDayRecord(userId?: string) {
         setDb((prev) => {
           nextDb = { ...prev, [key]: updater(prev[key] ?? emptyDay()) };
           record = nextDb[key];
+          saveInternalBackup(prev, "Before saving schedule or uploaded day");
           saveDB(nextDb);
           return nextDb;
         });
