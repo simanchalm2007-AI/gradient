@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { createWorker } from "tesseract.js";
 import type { TimetableEntry, Weekday } from "../types";
 
 const dayMap: Record<string, Weekday> = { sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tues: 2, tuesday: 2, wed: 3, wednesday: 3, thu: 4, thurs: 4, thursday: 4, fri: 5, friday: 5, sat: 6, saturday: 6 };
@@ -49,6 +50,31 @@ async function extractPdfText(file: File): Promise<string> {
     const content = await page.getTextContent();
     pages.push(content.items.map((item) => "str" in item ? item.str : "").join(" "));
   }
+
+  return pages.join("\n");
+}
+
+async function extractOcrText(file: File): Promise<string> {
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await getDocument({ data }).promise;
+  const worker = await createWorker("eng");
+  const pages: string[] = [];
+  try {
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas is unavailable for OCR.");
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      const result = await worker.recognize(canvas);
+      pages.push(result.data.text);
+    }
+  } finally {
+    await worker.terminate();
+  }
   return pages.join("\n");
 }
 
@@ -65,9 +91,13 @@ export function PdfTimetableImport({ onAdd }: Props) {
     setStatus("");
     try {
       const text = await extractPdfText(file);
-      const extracted = parseRows(text);
+      let extracted = parseRows(text);
+      if (!extracted.length) {
+        setStatus("No text rows found. Running local OCR on the PDF pages…");
+        extracted = parseRows(await extractOcrText(file));
+      }
       setRows(extracted);
-      setStatus(extracted.length ? `Found ${extracted.length} class rows. Review them before importing.` : "No timetable rows were recognized. Try a text-based PDF or add entries manually.");
+      setStatus(extracted.length ? `Found ${extracted.length} class rows. Review and correct them before importing.` : "No timetable rows were recognized. Add entries manually or check the scan quality.");
     } catch (error) {
       console.error("Gradient timetable PDF extraction failed", error);
       setStatus("Could not read this PDF. Scanned/image-only PDFs need OCR or a native AI service.");
@@ -87,10 +117,11 @@ export function PdfTimetableImport({ onAdd }: Props) {
       {fileName && <p className="mt-2 text-xs text-muted">{fileName}</p>}
       {status && <p className="mt-2 rounded-lg border border-amber/30 bg-amber/10 px-2.5 py-2 text-xs">{status}</p>}
       {rows.length > 0 && <div className="mt-3 space-y-2">
-        {rows.map((row, index) => <div key={`${row.subject}-${index}`} className="grid grid-cols-2 gap-2 rounded-lg border border-line bg-surface p-2 sm:grid-cols-4">
+        {rows.map((row, index) => <div key={`${row.subject}-${index}`} className="grid grid-cols-2 gap-2 rounded-lg border border-line bg-surface p-2 sm:grid-cols-5">
           <input value={row.subject} onChange={(e) => update(index, { subject: e.target.value })} className="col-span-2 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-xs sm:col-span-2" />
           <input type="time" value={row.start} onChange={(e) => update(index, { start: e.target.value })} className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-xs" />
           <input type="time" value={row.end} onChange={(e) => update(index, { end: e.target.value })} className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-xs" />
+          <input value={row.faculty ?? ""} onChange={(e) => update(index, { faculty: e.target.value || undefined })} placeholder="Faculty" className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-xs" />
         </div>)}
         <button type="button" onClick={() => { rows.forEach(onAdd); setRows([]); setStatus("Timetable imported and saved."); }} className="rounded-lg bg-amber px-3 py-2 text-xs font-semibold text-bg">Import reviewed classes</button>
       </div>}

@@ -43,6 +43,7 @@ export interface TimetableEntry {
   start: string;
   end: string;
   room?: string;
+  faculty?: string;
   semester?: string;
   archived?: boolean;
 }

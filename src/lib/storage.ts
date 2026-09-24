@@ -244,6 +244,14 @@ export function useDayRecord(userId?: string) {
     });
   }, []);
 
+  const updateTimetableEntry = useCallback((id: string, patch: Partial<Omit<TimetableEntry, "id">>) => {
+    setAcademic((previous) => {
+      const next = { ...previous, timetable: previous.timetable.map((entry) => entry.id === id ? { ...entry, ...patch } : entry) };
+      saveAcademic(next);
+      return next;
+    });
+  }, []);
+
   const setAttendance = useCallback((record: Omit<AttendanceRecord, "date"> & { date?: string }) => {
     const date = record.date ?? key;
     update((d) => ({
@@ -287,5 +295,5 @@ export function useDayRecord(userId?: string) {
 
   const imports = Object.values(db).flatMap((record) => record.imports ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const attendanceRecords = Object.values(db).flatMap((record) => record.attendance ?? []);
-  return { day, imports, activityHistory, attendanceRecords, timetable: academic.timetable, attendanceTarget: academic.target, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, addTimetableEntry, deleteTimetableEntry, archiveTimetableEntry, setAttendance, setAttendanceTarget, streak, saveState, retrySave };
+  return { day, imports, activityHistory, attendanceRecords, timetable: academic.timetable, attendanceTarget: academic.target, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, addTimetableEntry, updateTimetableEntry, deleteTimetableEntry, archiveTimetableEntry, setAttendance, setAttendanceTarget, streak, saveState, retrySave };
 }
