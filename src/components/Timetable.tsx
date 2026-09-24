@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { TimetableEntry, Weekday } from "../types";
+import { PdfTimetableImport } from "./PdfTimetableImport";
 
 const days: Array<{ value: Weekday; label: string; short: string }> = [
   { value: 1, label: "Monday", short: "Mon" }, { value: 2, label: "Tuesday", short: "Tue" },
@@ -40,5 +41,6 @@ export function Timetable({ entries, onAdd, onDelete, onArchive }: Props) {
       <div className="col-span-2 flex flex-wrap gap-1 sm:col-span-2">{days.map((day) => <button type="button" key={day.value} onClick={() => toggleDay(day.value)} className={`rounded-full border px-2.5 py-1 text-xs ${selectedDays.includes(day.value) ? "border-amber bg-amber text-bg" : "border-line text-muted"}`}>{day.short}</button>)}</div>
       <button className="col-span-2 rounded-lg bg-amber px-4 py-2 text-sm font-semibold text-bg hover:brightness-110 sm:col-span-4" type="submit">Add timetable entry</button>
     </form>
+    <PdfTimetableImport onAdd={onAdd} />
   </section>;
 }
