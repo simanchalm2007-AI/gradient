@@ -32,9 +32,31 @@ export interface ImportedEntry {
   blocks: Array<Omit<ScheduleBlock, "id" | "done">>;
 }
 
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type AttendanceStatus = "present" | "absent" | "cancelled";
+
+export interface TimetableEntry {
+  id: string;
+  subject: string;
+  days: Weekday[];
+  start: string;
+  end: string;
+  room?: string;
+  semester?: string;
+  archived?: boolean;
+}
+
+export interface AttendanceRecord {
+  instanceId: string;
+  timetableId: string;
+  date: string;
+  status: AttendanceStatus;
+}
+
 export interface DayRecord {
   blocks: ScheduleBlock[];
   checkin: CheckIn;
   reminders?: Reminder[];
   imports?: ImportedEntry[];
+  attendance?: AttendanceRecord[];
 }

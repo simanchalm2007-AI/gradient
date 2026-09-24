@@ -11,9 +11,11 @@ import { supabase } from "../lib/supabase";
 import { ReminderForm } from "../components/ReminderForm";
 import { ImportHistory } from "../components/ImportHistory";
 import { Assistant } from "../components/Assistant";
+import { Timetable } from "../components/Timetable";
+import { AttendanceSummary } from "../components/AttendanceSummary";
 
 export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: string }) {
-  const { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, streak, saveState, retrySave } = useDayRecord(userId);
+  const { day, imports, attendanceRecords, timetable, attendanceTarget, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, addTimetableEntry, deleteTimetableEntry, archiveTimetableEntry, setAttendance, setAttendanceTarget, streak, saveState, retrySave } = useDayRecord(userId);
   const [dismissedError, setDismissedError] = useState(false);
   const [viewMode, setViewMode] = useState<"auto" | "desktop" | "mobile">(() => (localStorage.getItem("gradient_view") as "auto" | "desktop" | "mobile" | null) ?? "auto");
   const [undoBlocks, setUndoBlocks] = useState<null | typeof day.blocks>(null);
@@ -73,7 +75,10 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
     [imports, day.blocks, streak],
   );
   const confirmImport = (blocks: Array<Omit<import("../types").ScheduleBlock, "id" | "done">>, rawText: string) => {
-    addBlocks(blocks);
+    const today = new Date().getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+    const fixedSubjects = timetable.filter((entry) => !entry.archived && entry.days.includes(today)).map((entry) => entry.subject.trim().toLowerCase());
+    const flexibleBlocks = blocks.filter((block) => !fixedSubjects.includes(block.title.trim().toLowerCase()));
+    addBlocks(flexibleBlocks);
     addImport({ rawText, blocks });
   };
   const applySuggestion = (suggestion: ActionableSuggestion) => {
@@ -132,6 +137,8 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
             <ReminderForm reminders={day.reminders ?? []} onAdd={addReminder} onDelete={deleteReminder} />
           </section>
           <ImportHistory entries={imports} onDelete={deleteImport} onEdit={updateImport} />
+          <Timetable entries={timetable} onAdd={addTimetableEntry} onDelete={deleteTimetableEntry} onArchive={archiveTimetableEntry} />
+          <AttendanceSummary entries={timetable} records={attendanceRecords} target={attendanceTarget} onSet={setAttendance} onTarget={setAttendanceTarget} />
 
           <section id="check-in" className="mt-5 rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-sm">
             <h2 className="font-display text-lg font-semibold">Evening check-in</h2>

@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DayRecord, ScheduleBlock, CheckIn, Reminder, ImportedEntry } from "../types";
+import type { DayRecord, ScheduleBlock, CheckIn, Reminder, ImportedEntry, TimetableEntry, AttendanceRecord } from "../types";
 import { supabase } from "./supabase";
 
 const DB_KEY = "gradient_db";
 const BACKUP_KEY = "gradient_internal_backups";
 const MAX_BACKUPS = 20;
+const ACADEMIC_KEY = "gradient_academic";
+
+interface AcademicData {
+  timetable: TimetableEntry[];
+  target: number;
+}
 
 type DB = Record<string, DayRecord>;
 interface InternalBackup {
@@ -49,12 +55,27 @@ function saveInternalBackup(db: DB, reason: string): void {
 }
 
 function emptyDay(): DayRecord {
-  return { blocks: [], checkin: {}, reminders: [], imports: [] };
+  return { blocks: [], checkin: {}, reminders: [], imports: [], attendance: [] };
+}
+
+function loadAcademic(): AcademicData {
+  try {
+    const raw = localStorage.getItem(ACADEMIC_KEY);
+    const value = raw ? JSON.parse(raw) as Partial<AcademicData> : {};
+    return { timetable: value.timetable ?? [], target: typeof value.target === "number" ? value.target : 75 };
+  } catch {
+    return { timetable: [], target: 75 };
+  }
+}
+
+function saveAcademic(data: AcademicData): void {
+  localStorage.setItem(ACADEMIC_KEY, JSON.stringify(data));
 }
 
 /** Reads/writes today's schedule + check-in, persisted to localStorage. */
 export function useDayRecord(userId?: string) {
   const [db, setDb] = useState<DB>(() => loadDB());
+  const [academic, setAcademic] = useState<AcademicData>(() => loadAcademic());
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const lastUpdate = useRef<((d: DayRecord) => DayRecord) | null>(null);
   const key = localDayKey();
@@ -190,6 +211,44 @@ export function useDayRecord(userId?: string) {
     [update],
   );
 
+  const addTimetableEntry = useCallback((entry: Omit<TimetableEntry, "id">) => {
+    setAcademic((previous) => {
+      const next = { ...previous, timetable: [...previous.timetable, { ...entry, id: crypto.randomUUID() }] };
+      saveAcademic(next);
+      return next;
+    });
+  }, []);
+
+  const deleteTimetableEntry = useCallback((id: string) => {
+    setAcademic((previous) => {
+      const next = { ...previous, timetable: previous.timetable.filter((entry) => entry.id !== id) };
+      saveAcademic(next);
+      return next;
+    });
+  }, []);
+
+  const archiveTimetableEntry = useCallback((id: string) => {
+    setAcademic((previous) => {
+      const next = { ...previous, timetable: previous.timetable.map((entry) => entry.id === id ? { ...entry, archived: true } : entry) };
+      saveAcademic(next);
+      return next;
+    });
+  }, []);
+
+  const setAttendance = useCallback((record: Omit<AttendanceRecord, "date"> & { date?: string }) => {
+    const date = record.date ?? key;
+    update((d) => ({
+      ...d,
+      attendance: [...(d.attendance ?? []).filter((item) => item.instanceId !== record.instanceId), { ...record, date }],
+    }));
+  }, [key, update]);
+
+  const setAttendanceTarget = useCallback((target: number) => {
+    const next = { ...academic, target: Math.max(1, Math.min(100, Math.round(target))) };
+    setAcademic(next);
+    saveAcademic(next);
+  }, [academic]);
+
   const deleteImport = useCallback(
     (id: string) => update((d) => ({ ...d, imports: (d.imports ?? []).filter((entry) => entry.id !== id) })),
     [update],
@@ -218,5 +277,6 @@ export function useDayRecord(userId?: string) {
   }, [db]);
 
   const imports = Object.values(db).flatMap((record) => record.imports ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, streak, saveState, retrySave };
+  const attendanceRecords = Object.values(db).flatMap((record) => record.attendance ?? []);
+  return { day, imports, attendanceRecords, timetable: academic.timetable, attendanceTarget: academic.target, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, addTimetableEntry, deleteTimetableEntry, archiveTimetableEntry, setAttendance, setAttendanceTarget, streak, saveState, retrySave };
 }

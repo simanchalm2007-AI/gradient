@@ -1,0 +1,24 @@
+import { useMemo, useState } from "react";
+import type { AttendanceRecord, AttendanceStatus, TimetableEntry } from "../types";
+import { ProgressRing } from "./ProgressRing";
+
+interface Props { entries: TimetableEntry[]; records: AttendanceRecord[]; target: number; onSet: (record: Omit<AttendanceRecord, "date">) => void; onTarget: (target: number) => void; }
+const statuses: AttendanceStatus[] = ["present", "absent", "cancelled"];
+export function AttendanceSummary({ entries, records, target, onSet, onTarget }: Props) {
+  const [targetDraft, setTargetDraft] = useState(String(target));
+  const today = new Date(); const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`; const weekday = today.getDay();
+  const classes = entries.filter((entry) => !entry.archived && entry.days.includes(weekday as 0 | 1 | 2 | 3 | 4 | 5 | 6)).sort((a, b) => a.start.localeCompare(b.start));
+  const subjectStats = useMemo(() => entries.filter((entry) => !entry.archived).map((entry) => {
+    const relevant = records.filter((record) => record.timetableId === entry.id); const held = relevant.filter((record) => record.status !== "cancelled").length; const present = relevant.filter((record) => record.status === "present").length;
+    const canMiss = held && present / held >= target ? Math.max(0, Math.floor(present / (target / 100) - held)) : 0;
+    const mustAttend = held && present / held < target ? Math.ceil((target / 100 * held - present) / (1 - target / 100)) : 0;
+    return { entry, held, present, percent: held ? Math.round((present / held) * 100) : 0, canMiss, mustAttend };
+  }), [entries, records, target]);
+  const overall = subjectStats.reduce((sum, stat) => sum + stat.held, 0); const present = subjectStats.reduce((sum, stat) => sum + stat.present, 0); const percent = overall ? Math.round((present / overall) * 100) : 0;
+  function current(entry: TimetableEntry) { return records.find((record) => record.instanceId === `${entry.id}:${date}`)?.status; }
+  return <section className="mt-5 rounded-2xl border border-line bg-surface p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-display text-lg font-semibold">Attendance</h2><p className="mt-1 text-xs text-muted">Cancelled classes are excluded from held totals.</p></div><form className="flex items-center gap-2 text-xs" onSubmit={(event) => { event.preventDefault(); onTarget(Number(targetDraft)); }}><label htmlFor="attendance-target">Target</label><input id="attendance-target" className="w-16 rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm" type="number" min="1" max="100" value={targetDraft} onChange={(event) => setTargetDraft(event.target.value)} /><span>%</span><button className="rounded-lg border border-line px-2 py-1.5 font-semibold" type="submit">Set</button></form></div>
+    <div className="mt-4 flex items-center gap-4"><ProgressRing percent={percent} /><div className="text-sm"><div className="font-semibold">{percent}% overall</div><div className="text-muted">{present} present · {overall} held · target {target}%</div><div className={`mt-1 text-xs ${percent >= target ? "text-teal" : "text-flag"}`}>{percent >= target ? "On target" : "Below target"}</div></div></div>
+    <div className="mt-4 border-t border-line pt-3"><h3 className="text-sm font-semibold">Today's classes</h3>{classes.length === 0 ? <p className="mt-2 text-xs text-muted">No classes scheduled today.</p> : classes.map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2 text-sm"><span><strong>{entry.subject}</strong><span className="ml-2 text-xs text-muted">{entry.start}–{entry.end}</span></span><div className="flex gap-1">{statuses.map((status) => <button type="button" key={status} onClick={() => onSet({ timetableId: entry.id, instanceId: `${entry.id}:${date}`, status })} className={`rounded-full border px-2 py-1 text-[11px] capitalize ${current(entry) === status ? "border-amber bg-amber text-bg" : "border-line text-muted"}`}>{status}</button>)}</div></div>)}</div>
+    <div className="mt-4 space-y-3">{subjectStats.map(({ entry, held, percent: value, canMiss, mustAttend }) => <div key={entry.id}><div className="mb-1 flex justify-between text-xs"><span>{entry.subject}</span><span className="text-muted">{value}% · {held} held</span></div><div className="h-2 overflow-hidden rounded-full bg-surface-2"><div className={`h-full rounded-full ${value >= target ? "bg-teal" : "bg-amber"}`} style={{ width: `${value}%` }} /></div><div className="mt-1 text-[11px] text-muted">{held === 0 ? "Mark classes to see attendance guidance." : value >= target ? `You can miss ${canMiss} more ${canMiss === 1 ? "class" : "classes"} and stay at ${target}%.` : `Attend the next ${mustAttend} ${mustAttend === 1 ? "class" : "classes"} to reach ${target}%.`}</div></div>)}</div>
+  </section>;
+}
