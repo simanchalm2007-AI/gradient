@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Dashboard } from "./pages/Dashboard";
 import { AuthPage } from "./pages/AuthPage";
 import { PlannerTools } from "./pages/PlannerTools";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 
@@ -22,6 +23,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={session ? <Dashboard userEmail={isLocal ? undefined : session.user.email} userId={isLocal ? undefined : session.user.id} /> : <AuthPage onLocalPreview={() => setSession({ local: true })} />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/tools/daily" element={<PlannerTools mode="daily" />} />
         <Route path="/tools/weekly" element={<PlannerTools mode="weekly" />} />
         <Route path="/tools/reminders" element={<PlannerTools mode="reminders" />} />
