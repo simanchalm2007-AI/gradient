@@ -1,4 +1,4 @@
-import type { ScheduleBlock, CheckIn } from "../types";
+import type { ScheduleBlock, CheckIn, ImportedEntry } from "../types";
 
 function toMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -32,6 +32,7 @@ export function generateSuggestions(blocks: ScheduleBlock[], checkin: CheckIn): 
         `"${b.title}" runs ${formatDuration(dur)} straight — add a short break after it. Focus holds up better in shorter stretches.`,
       );
     }
+
   });
 
   for (let i = 0; i < sorted.length - 1; i++) {
@@ -82,4 +83,54 @@ export function generateSuggestions(blocks: ScheduleBlock[], checkin: CheckIn): 
   }
 
   return tips.slice(0, 5);
+}
+
+/** Finds encouraging, deterministic patterns once a few imports are available. */
+export function generateRoutineSuggestions(
+  imports: ImportedEntry[],
+  todayBlocks: ScheduleBlock[],
+  currentStreak: number,
+): string[] {
+  if (imports.length < 3) {
+    return ["Keep logging your days — personalized routine suggestions unlock after 3 imports."];
+  }
+
+  const tips: string[] = [];
+  const normalized = (title: string) => title.trim().toLowerCase();
+  const frequency = new Map<string, { title: string; count: number }>();
+  for (const entry of imports) {
+    const seen = new Set<string>();
+    for (const block of entry.blocks) {
+      const key = normalized(block.title);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const item = frequency.get(key) ?? { title: block.title, count: 0 };
+      item.count += 1;
+      frequency.set(key, item);
+    }
+  }
+
+  const recurring = [...frequency.values()].sort((a, b) => b.count - a.count);
+  const todayTitles = new Set(todayBlocks.map((block) => normalized(block.title)));
+  const expected = recurring.find(
+    (item) => item.count >= Math.max(3, Math.ceil(imports.length * 0.6)) && !todayTitles.has(normalized(item.title)),
+  );
+  if (expected) {
+    tips.push(`You often include "${expected.title}" — consider adding it today if it supports your plan.`);
+  }
+
+  const weekday = new Date().getDay();
+  const weekdayImports = imports.filter((entry) => new Date(entry.createdAt).getDay() === weekday);
+  if (weekdayImports.length >= 2 && weekdayImports.length < imports.length / 2) {
+    tips.push("You tend to log fewer activities on this weekday — a lighter, realistic plan may be easier to finish.");
+  }
+
+  if (currentStreak > 0 && currentStreak % 5 === 4) {
+    tips.push(`You're one completed day away from a ${currentStreak + 1}-day streak — keep the next step small and achievable.`);
+  }
+
+  if (tips.length === 0) {
+    tips.push("Your routine is taking shape. Keep logging a few more days to reveal stronger patterns.");
+  }
+  return tips.slice(0, 3);
 }

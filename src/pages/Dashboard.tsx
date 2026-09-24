@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDayRecord } from "../lib/storage";
-import { durationMinutes, generateSuggestions, formatDuration } from "../lib/suggestions";
+import { durationMinutes, generateRoutineSuggestions, generateSuggestions, formatDuration } from "../lib/suggestions";
 import { ScheduleTimeline } from "../components/ScheduleTimeline";
 import { AddBlockForm } from "../components/AddBlockForm";
 import { CheckInForm } from "../components/CheckInForm";
@@ -8,9 +8,12 @@ import { ProgressRing } from "../components/ProgressRing";
 import { Suggestions } from "../components/Suggestions";
 import { ScheduleImport } from "../components/ScheduleImport";
 import { supabase } from "../lib/supabase";
+import { ReminderForm } from "../components/ReminderForm";
+import { ImportHistory } from "../components/ImportHistory";
 
 export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: string }) {
-  const { day, addBlock, addBlocks, toggleBlock, deleteBlock, saveCheckin, streak } = useDayRecord(userId);
+  const { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, streak, saveState, retrySave } = useDayRecord(userId);
+  const [dismissedError, setDismissedError] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem("gradient_theme");
     return stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -20,6 +23,18 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
     document.documentElement.classList.toggle("dark", darkMode);
     localStorage.setItem("gradient_theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+
+  useEffect(() => {
+    const timers = (day.reminders ?? []).map((reminder) => {
+      const [hours, minutes] = reminder.at.split(":").map(Number);
+      const target = new Date();
+      target.setHours(hours, minutes, 0, 0);
+      const delay = target.getTime() - Date.now();
+      if (delay <= 0 || delay > 24 * 60 * 60 * 1000 || !("Notification" in window) || Notification.permission !== "granted") return undefined;
+      return window.setTimeout(() => new Notification("Gradient reminder", { body: reminder.title }), delay);
+    }).filter((timer): timer is number => timer !== undefined);
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [day.reminders]);
 
   const dateLabel = useMemo(
     () => new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }),
@@ -36,9 +51,17 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
     .reduce((s, b) => s + durationMinutes(b.start, b.end), 0);
 
   const tips = useMemo(() => generateSuggestions(day.blocks, day.checkin), [day.blocks, day.checkin]);
+  const routineTips = useMemo(
+    () => generateRoutineSuggestions(imports, day.blocks, streak()),
+    [imports, day.blocks, streak],
+  );
+  const confirmImport = (blocks: Array<Omit<import("../types").ScheduleBlock, "id" | "done">>, rawText: string) => {
+    addBlocks(blocks);
+    addImport({ rawText, blocks });
+  };
 
   return (
-    <div className="mx-auto max-w-[900px] px-5 pb-20 pt-7">
+    <div className="mx-auto max-w-[1180px] px-5 pb-20 pt-7 sm:px-8 lg:px-10">
       <nav className="mb-8 flex items-center justify-between border-b border-line pb-4" aria-label="Primary navigation">
         <span className="font-display text-xl font-semibold tracking-tight">Gradient</span>
         <div className="flex items-center gap-2">
@@ -58,16 +81,19 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
         </div>
       </header>
 
-      <div className="grid grid-cols-[1.3fr_1fr] gap-5 max-[720px]:grid-cols-1">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-[1.15fr_0.85fr] lg:grid-cols-[1.3fr_1fr]">
         <div>
-          <section className="rounded-2xl border border-line bg-surface p-5">
-            <h2 className="font-display text-lg font-semibold">Today's schedule</h2>
-            <ScheduleImport onAdd={addBlocks} />
+          <section id="schedule" className="rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-sm">
+            <h2 className="flex items-center gap-2 font-display text-lg font-semibold">Completed today {saveState === "saved" && <span className="text-xs font-sans font-normal text-teal">✓ saved</span>}</h2>
+            <p className="mt-1 text-xs text-muted">Log what you actually completed at the end of your day.</p>
+            <ScheduleImport onConfirm={confirmImport} />
             <ScheduleTimeline blocks={day.blocks} onToggle={toggleBlock} onDelete={deleteBlock} />
             <AddBlockForm onAdd={addBlock} />
+            <ReminderForm reminders={day.reminders ?? []} onAdd={addReminder} onDelete={deleteReminder} />
           </section>
+          <ImportHistory entries={imports} onDelete={deleteImport} />
 
-          <section className="mt-5 rounded-2xl border border-line bg-surface p-5">
+          <section id="check-in" className="mt-5 rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-sm">
             <h2 className="font-display text-lg font-semibold">Evening check-in</h2>
             <div className="mt-3.5">
               <CheckInForm value={day.checkin} onSave={saveCheckin} />
@@ -76,7 +102,7 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
         </div>
 
         <div>
-          <section className="rounded-2xl border border-line bg-surface p-5">
+          <section id="progress" className="rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-sm">
             <h2 className="font-display text-lg font-semibold">Today's progress</h2>
             <div className="mt-3.5 flex items-center gap-5">
               <ProgressRing percent={percent} />
@@ -103,9 +129,20 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
             <h2 className="font-display text-lg font-semibold">Suggestions for you</h2>
             <Suggestions tips={tips} />
           </section>
+          <section className="mt-5 rounded-2xl border border-line bg-surface p-5">
+            <h2 className="font-display text-lg font-semibold">Routine insights</h2>
+            <Suggestions tips={routineTips} />
+          </section>
         </div>
       </div>
 
+      {(saveState === "saving" || saveState === "saved" || (saveState === "error" && !dismissedError)) && (
+        <div className={`fixed bottom-5 right-5 z-10 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg ${saveState === "error" ? "border-flag/40 bg-flag/10 text-flag" : "border-line bg-surface"} ${saveState === "saved" ? "save-toast" : ""}`}>
+          {saveState === "saving" && "Saving…"}
+          {saveState === "saved" && "✓ Saved"}
+          {saveState === "error" && <><span>Failed to save</span><button type="button" onClick={() => { setDismissedError(false); void retrySave(); }} className="font-semibold underline">Retry</button><button type="button" aria-label="Dismiss save notification" onClick={() => setDismissedError(true)} className="text-muted">×</button></>}
+        </div>
+      )}
       <footer className="mt-8 text-center text-xs text-muted">{userEmail ? "Your signed-in data syncs securely across devices." : "Data stays on this device only."}</footer>
     </div>
   );

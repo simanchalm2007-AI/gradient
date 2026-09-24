@@ -34,23 +34,46 @@ function classify(title: string): BlockType {
 }
 
 export function parseSchedule(input: string): DraftBlock[] {
+  return parseScheduleDetailed(input).drafts;
+}
+
+export function parseScheduleDetailed(input: string): { drafts: DraftBlock[]; unparsedLines: string[] } {
   const drafts: DraftBlock[] = [];
+  const unparsedLines: string[] = [];
   let previous = 8 * 60;
   for (const rawLine of input.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)) {
     const colon = rawLine.match(/^(.*?)\s*:\s*(.+)$/);
     const firstTime = rawLine.search(TIME);
     const title = colon ? colon[1].trim() : firstTime > 0 ? rawLine.slice(0, firstTime).trim() : "";
     const timeText = colon ? colon[2] : firstTime > 0 ? rawLine.slice(firstTime) : "";
-    if (!title || !timeText) continue;
+    if (!title || !timeText) {
+      unparsedLines.push(rawLine);
+      continue;
+    }
     const matches = [...timeText.matchAll(new RegExp(TIME.source, "gi"))];
-    if (!matches.length) continue;
+    if (!matches.length) {
+      unparsedLines.push(rawLine);
+      continue;
+    }
     const start = parseTime(matches[0][0], previous);
-    if (start === null) continue;
+    if (start === null) {
+      unparsedLines.push(rawLine);
+      continue;
+    }
     const end = matches[1] ? parseTime(matches[1][0], start + 60) : start + 60;
-    if (end === null) continue;
+    if (end === null) {
+      unparsedLines.push(rawLine);
+      continue;
+    }
     const adjustedEnd = end <= start ? end + 1440 : end;
-    drafts.push({ title, start: clock(start), end: clock(adjustedEnd), type: classify(title) });
+    drafts.push({
+      title,
+      start: clock(start),
+      end: clock(adjustedEnd),
+      type: classify(title),
+      uncertain: !matches[0][0].match(/am|pm/i) || Boolean(matches[1] && !matches[1][0].match(/am|pm/i)),
+    });
     previous = adjustedEnd % 1440;
   }
-  return drafts;
+  return { drafts, unparsedLines };
 }

@@ -1,21 +1,24 @@
 import { useState } from "react";
 import type { BlockType, DraftBlock } from "../types";
-import { parseSchedule } from "../lib/parseSchedule";
+import { parseScheduleDetailed } from "../lib/parseSchedule";
 
 interface ScheduleImportProps {
-  onAdd: (blocks: DraftBlock[]) => void;
+  onConfirm: (blocks: DraftBlock[], rawText: string) => void;
 }
 
 const inputClass =
   "w-full rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-sm text-ink outline-none focus:outline-2 focus:outline-amber";
 
-export function ScheduleImport({ onAdd }: ScheduleImportProps) {
+export function ScheduleImport({ onConfirm }: ScheduleImportProps) {
   const [text, setText] = useState("");
   const [drafts, setDrafts] = useState<DraftBlock[]>([]);
+  const [unparsedLines, setUnparsedLines] = useState<string[]>([]);
   const [listening, setListening] = useState(false);
 
   function parse() {
-    setDrafts(parseSchedule(text));
+    const result = parseScheduleDetailed(text);
+    setDrafts(result.drafts);
+    setUnparsedLines(result.unparsedLines);
   }
 
   function toggleVoice() {
@@ -78,16 +81,27 @@ export function ScheduleImport({ onAdd }: ScheduleImportProps) {
       <button type="button" onClick={parse} disabled={!text.trim()} className="mt-2 rounded-lg bg-amber px-4 py-2 text-sm font-semibold text-bg disabled:opacity-40">Parse schedule</button>
       {drafts.length > 0 && (
         <div className="mt-4 space-y-2">
+          {drafts.some((draft) => draft.uncertain) && (
+            <p className="rounded-lg border border-amber/40 bg-amber/10 px-3 py-2 text-xs text-amber">
+              Yellow-marked times are approximate because no AM/PM was provided. Review them before saving.
+            </p>
+          )}
+          {unparsedLines.length > 0 && (
+            <div className="rounded-lg border border-flag/40 bg-flag/10 px-3 py-2 text-xs text-flag">
+              <strong>Could not parse:</strong> {unparsedLines.join(" · ")}
+            </div>
+          )}
           {drafts.map((draft, index) => (
-            <div key={`${draft.title}-${index}`} className="grid grid-cols-[1fr_90px_90px_120px_auto] items-end gap-2 max-[650px]:grid-cols-2">
+            <div key={`${draft.title}-${index}`} className={`grid grid-cols-[1fr_90px_90px_120px_auto] items-end gap-2 rounded-lg p-1 max-[650px]:grid-cols-2 ${draft.uncertain ? "bg-amber/10" : ""}`}>
               <label className="text-xs text-muted">Activity<input value={draft.title} onChange={(e) => update(index, { title: e.target.value })} className={inputClass} /></label>
               <label className="text-xs text-muted">Start<input type="time" value={draft.start} onChange={(e) => update(index, { start: e.target.value })} className={inputClass} /></label>
               <label className="text-xs text-muted">End<input type="time" value={draft.end} onChange={(e) => update(index, { end: e.target.value })} className={inputClass} /></label>
               <label className="text-xs text-muted">Type<select value={draft.type} onChange={(e) => update(index, { type: e.target.value as BlockType })} className={inputClass}><option value="study">Study</option><option value="break">Break</option><option value="exercise">Exercise</option><option value="sleep">Sleep / wind-down</option></select></label>
               <button type="button" onClick={() => insertBreak(index)} className="rounded-lg border border-line px-2 py-2 text-xs text-muted hover:text-ink">+ break</button>
+              <button type="button" onClick={() => setDrafts((current) => current.filter((_, i) => i !== index))} className="rounded-lg border border-line px-2 py-2 text-xs text-muted hover:text-flag">Remove</button>
             </div>
           ))}
-          <button type="button" onClick={() => { onAdd(drafts); setDrafts([]); setText(""); }} className="mt-2 rounded-lg bg-teal px-4 py-2 text-sm font-semibold text-bg">Add reviewed blocks</button>
+          <button type="button" onClick={() => { onConfirm(drafts.map(({ uncertain: _uncertain, ...draft }) => draft), text); setDrafts([]); setUnparsedLines([]); setText(""); }} className="mt-2 rounded-lg bg-teal px-4 py-2 text-sm font-semibold text-bg">Save reviewed import</button>
         </div>
       )}
     </div>

@@ -27,7 +27,7 @@ export function AddBlockForm({ onAdd }: AddBlockFormProps) {
   return (
     <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-4 gap-2.5 max-[560px]:grid-cols-2">
       <div className="col-span-4 max-[560px]:col-span-2">
-        <label className="mb-1 block text-xs text-muted">What is it?</label>
+        <label className="mb-1 block text-xs text-muted">Completed activity</label>
         <input
           type="text"
           value={title}
@@ -59,7 +59,7 @@ export function AddBlockForm({ onAdd }: AddBlockFormProps) {
           type="submit"
           className="w-full rounded-lg bg-amber px-4 py-2 text-sm font-semibold text-bg hover:brightness-110"
         >
-          Add block
+          Log activity
         </button>
       </div>
     </form>

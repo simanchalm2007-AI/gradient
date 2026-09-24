@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
-import type { DayRecord, ScheduleBlock, CheckIn } from "../types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { DayRecord, ScheduleBlock, CheckIn, Reminder, ImportedEntry } from "../types";
 import { supabase } from "./supabase";
 
 const DB_KEY = "gradient_db";
 
 type DB = Record<string, DayRecord>;
 
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+function localDayKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function loadDB(): DB {
@@ -24,13 +27,15 @@ function saveDB(db: DB): void {
 }
 
 function emptyDay(): DayRecord {
-  return { blocks: [], checkin: {} };
+  return { blocks: [], checkin: {}, reminders: [], imports: [] };
 }
 
 /** Reads/writes today's schedule + check-in, persisted to localStorage. */
 export function useDayRecord(userId?: string) {
   const [db, setDb] = useState<DB>(() => loadDB());
-  const key = todayKey();
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const lastUpdate = useRef<((d: DayRecord) => DayRecord) | null>(null);
+  const key = localDayKey();
   const day = db[key] ?? emptyDay();
 
   useEffect(() => {
@@ -47,18 +52,37 @@ export function useDayRecord(userId?: string) {
   }, [userId]);
 
   const update = useCallback(
-    (updater: (d: DayRecord) => DayRecord) => {
-      setDb((prev) => {
-        const next: DB = { ...prev, [key]: updater(prev[key] ?? emptyDay()) };
-        saveDB(next);
-        if (userId && supabase) {
-          void supabase.from("day_records").upsert({ user_id: userId, day_key: key, record: next[key] }, { onConflict: "user_id,day_key" });
+    async (updater: (d: DayRecord) => DayRecord) => {
+      lastUpdate.current = updater;
+      setSaveState("saving");
+      let record: DayRecord | undefined;
+      let nextDb: DB | undefined;
+      try {
+        setDb((prev) => {
+          nextDb = { ...prev, [key]: updater(prev[key] ?? emptyDay()) };
+          record = nextDb[key];
+          saveDB(nextDb);
+          return nextDb;
+        });
+        if (userId && supabase && record) {
+          const { error } = await supabase
+            .from("day_records")
+            .upsert({ user_id: userId, day_key: key, record }, { onConflict: "user_id,day_key" });
+          if (error) throw error;
         }
-        return next;
-      });
+        setSaveState("saved");
+      } catch (error) {
+        console.error("Gradient save failed", error);
+        setSaveState("error");
+        throw error;
+      }
     },
     [key, userId],
   );
+
+  const retrySave = useCallback(async () => {
+    if (lastUpdate.current) await update(lastUpdate.current);
+  }, [update]);
 
   const addBlock = useCallback(
     (block: Omit<ScheduleBlock, "id" | "done">) => {
@@ -104,12 +128,44 @@ export function useDayRecord(userId?: string) {
     [update],
   );
 
+  const addReminder = useCallback(
+    (reminder: Omit<Reminder, "id">) => {
+      update((d) => ({
+        ...d,
+        reminders: [...(d.reminders ?? []), { ...reminder, id: crypto.randomUUID() }],
+      }));
+    },
+    [update],
+  );
+
+  const deleteReminder = useCallback(
+    (id: string) => {
+      update((d) => ({ ...d, reminders: (d.reminders ?? []).filter((reminder) => reminder.id !== id) }));
+    },
+    [update],
+  );
+
+  const addImport = useCallback(
+    (entry: Omit<ImportedEntry, "id" | "createdAt">) => {
+      update((d) => ({
+        ...d,
+        imports: [...(d.imports ?? []), { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() }],
+      }));
+    },
+    [update],
+  );
+
+  const deleteImport = useCallback(
+    (id: string) => update((d) => ({ ...d, imports: (d.imports ?? []).filter((entry) => entry.id !== id) })),
+    [update],
+  );
+
   /** Consecutive days ending today where every scheduled block was completed. */
   const streak = useCallback((): number => {
     let count = 0;
     const d = new Date();
     for (;;) {
-      const k = d.toISOString().slice(0, 10);
+      const k = localDayKey(d);
       const rec = db[k];
       if (rec && rec.blocks.length > 0 && rec.blocks.every((b) => b.done)) {
         count += 1;
@@ -121,5 +177,6 @@ export function useDayRecord(userId?: string) {
     return count;
   }, [db]);
 
-  return { day, addBlock, addBlocks, toggleBlock, deleteBlock, saveCheckin, streak };
+  const imports = Object.values(db).flatMap((record) => record.imports ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, streak, saveState, retrySave };
 }
