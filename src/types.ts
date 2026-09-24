@@ -14,6 +14,8 @@ export type DraftBlock = Omit<ScheduleBlock, "id" | "done"> & { uncertain?: bool
 export interface CheckIn {
   sleepHours?: number;
   exercised?: "yes" | "no";
+  stepCount?: number;
+  healthSource?: "apple-health" | "health-connect";
 }
 
 export interface Reminder {

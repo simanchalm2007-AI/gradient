@@ -35,13 +35,17 @@ function saveDB(db: DB): void {
 }
 
 function saveInternalBackup(db: DB, reason: string): void {
-  const raw = localStorage.getItem(BACKUP_KEY);
-  const backups = raw ? JSON.parse(raw) as InternalBackup[] : [];
-  const next: InternalBackup[] = [
-    { id: crypto.randomUUID(), createdAt: new Date().toISOString(), reason, db },
-    ...backups,
-  ].slice(0, MAX_BACKUPS);
-  localStorage.setItem(BACKUP_KEY, JSON.stringify(next));
+  try {
+    const raw = localStorage.getItem(BACKUP_KEY);
+    const backups = raw ? JSON.parse(raw) as InternalBackup[] : [];
+    const next: InternalBackup[] = [
+      { id: crypto.randomUUID(), createdAt: new Date().toISOString(), reason, db },
+      ...backups,
+    ].slice(0, MAX_BACKUPS);
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(next));
+  } catch (error) {
+    console.warn("Gradient internal backup skipped", error);
+  }
 }
 
 function emptyDay(): DayRecord {
