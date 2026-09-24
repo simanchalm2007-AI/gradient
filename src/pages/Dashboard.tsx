@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDayRecord } from "../lib/storage";
-import { durationMinutes, generateRoutineSuggestions, generateSuggestions, formatDuration } from "../lib/suggestions";
+import { durationMinutes, generateRoutineSuggestions, generateSuggestions, formatDuration, type ActionableSuggestion } from "../lib/suggestions";
 import { ScheduleTimeline } from "../components/ScheduleTimeline";
 import { AddBlockForm } from "../components/AddBlockForm";
 import { CheckInForm } from "../components/CheckInForm";
@@ -10,10 +10,14 @@ import { ScheduleImport } from "../components/ScheduleImport";
 import { supabase } from "../lib/supabase";
 import { ReminderForm } from "../components/ReminderForm";
 import { ImportHistory } from "../components/ImportHistory";
+import { Assistant } from "../components/Assistant";
 
 export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: string }) {
-  const { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, streak, saveState, retrySave } = useDayRecord(userId);
+  const { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, streak, saveState, retrySave } = useDayRecord(userId);
   const [dismissedError, setDismissedError] = useState(false);
+  const [viewMode, setViewMode] = useState<"auto" | "desktop" | "mobile">(() => (localStorage.getItem("gradient_view") as "auto" | "desktop" | "mobile" | null) ?? "auto");
+  const [undoBlocks, setUndoBlocks] = useState<null | typeof day.blocks>(null);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem("gradient_theme");
     return stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -23,6 +27,19 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
     document.documentElement.classList.toggle("dark", darkMode);
     localStorage.setItem("gradient_theme", darkMode ? "dark" : "light");
   }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem("gradient_view", viewMode);
+    window.dispatchEvent(new Event("gradient-view-change"));
+  }, [viewMode]);
+
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, []);
 
   useEffect(() => {
     const timers = (day.reminders ?? []).map((reminder) => {
@@ -59,15 +76,36 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
     addBlocks(blocks);
     addImport({ rawText, blocks });
   };
+  const applySuggestion = (suggestion: ActionableSuggestion) => {
+    setUndoBlocks(day.blocks);
+    suggestion.apply();
+  };
+  const exportData = (format: "json" | "csv") => {
+    const payload = { exportedAt: new Date().toISOString(), days: JSON.parse(localStorage.getItem("gradient_db") ?? "{}") };
+    const content = format === "json"
+      ? JSON.stringify(payload, null, 2)
+      : ["date,title,start,end,type,done", ...Object.entries(payload.days as Record<string, typeof day>).flatMap(([date, record]) => record.blocks.map((block) => [date, block.title, block.start, block.end, block.type, block.done].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")))].join("\n");
+    const url = URL.createObjectURL(new Blob([content], { type: format === "json" ? "application/json" : "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `gradient-export.${format}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  const forcedMobile = viewMode === "mobile";
+  const layoutClass = forcedMobile ? "grid grid-cols-1 gap-5" : "grid grid-cols-1 gap-5 md:grid-cols-[1.15fr_0.85fr] lg:grid-cols-[1.3fr_1fr]";
+  const hasHistory = imports.length > 0 || day.blocks.length > 0;
 
   return (
-    <div className="mx-auto max-w-[1180px] px-5 pb-20 pt-7 sm:px-8 lg:px-10">
+    <div className={`mx-auto max-w-[1180px] px-5 pb-20 pt-7 sm:px-8 lg:px-10 ${viewMode === "mobile" ? "force-mobile" : ""}`}>
       <nav className="mb-8 flex items-center justify-between border-b border-line pb-4" aria-label="Primary navigation">
         <span className="font-display text-xl font-semibold tracking-tight">Gradient</span>
         <div className="flex items-center gap-2">
           {userEmail && <span className="hidden text-xs text-muted sm:inline">{userEmail}</span>}
           {userEmail && <button type="button" onClick={() => supabase?.auth.signOut()} className="rounded-full border border-line px-3 py-1.5 text-xs text-muted hover:text-ink">Log out</button>}
           <button type="button" onClick={() => setDarkMode((current) => !current)} aria-label={`Switch to ${darkMode ? "light" : "dark"} mode`} className="flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm text-ink transition-colors hover:border-muted"><span aria-hidden="true">{darkMode ? "☀" : "☾"}</span>{darkMode ? "Light mode" : "Dark mode"}</button>
+          <button type="button" onClick={() => setViewMode((current) => current === "mobile" ? "desktop" : "mobile")} title={`Switch to ${viewMode === "mobile" ? "desktop" : "mobile"} view`} aria-label={`Switch to ${viewMode === "mobile" ? "desktop" : "mobile"} view`} className="rounded-full border border-line bg-surface px-3 py-1.5 text-sm">{viewMode === "mobile" ? "▣" : "▯"}</button>
+          <select aria-label="Layout mode" value={viewMode} onChange={(event) => setViewMode(event.target.value as typeof viewMode)} className="hidden rounded-full border border-line bg-surface px-2 py-1.5 text-xs text-ink sm:block"><option value="auto">Auto</option><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select>
         </div>
       </nav>
 
@@ -81,17 +119,19 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
         </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-[1.15fr_0.85fr] lg:grid-cols-[1.3fr_1fr]">
+      {!online && <div className="mb-4 rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 text-sm">You are offline. Your changes are saved on this device and will retry when you reconnect.</div>}
+      {!hasHistory && <div className="mb-4 rounded-xl border border-line bg-surface p-4 text-sm"><strong>Welcome to Gradient.</strong><span className="ml-2 text-muted">Log a completed activity or import your day to start building your history and personalized suggestions.</span></div>}
+      <div className={layoutClass}>
         <div>
           <section id="schedule" className="rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-sm">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold">Completed today {saveState === "saved" && <span className="text-xs font-sans font-normal text-teal">✓ saved</span>}</h2>
             <p className="mt-1 text-xs text-muted">Log what you actually completed at the end of your day.</p>
             <ScheduleImport onConfirm={confirmImport} />
-            <ScheduleTimeline blocks={day.blocks} onToggle={toggleBlock} onDelete={deleteBlock} />
-            <AddBlockForm onAdd={addBlock} />
+            <ScheduleTimeline blocks={day.blocks} onToggle={toggleBlock} onDelete={deleteBlock} onEdit={updateBlock} imports={imports} onApplySuggestion={applySuggestion} />
+            <AddBlockForm onAdd={addBlock} blocks={day.blocks} imports={imports} onApplySuggestion={applySuggestion} />
             <ReminderForm reminders={day.reminders ?? []} onAdd={addReminder} onDelete={deleteReminder} />
           </section>
-          <ImportHistory entries={imports} onDelete={deleteImport} />
+          <ImportHistory entries={imports} onDelete={deleteImport} onEdit={updateImport} />
 
           <section id="check-in" className="mt-5 rounded-2xl border border-line bg-surface p-5 transition-shadow hover:shadow-sm">
             <h2 className="font-display text-lg font-semibold">Evening check-in</h2>
@@ -129,6 +169,12 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
             <h2 className="font-display text-lg font-semibold">Suggestions for you</h2>
             <Suggestions tips={tips} />
           </section>
+          {undoBlocks && <div className="mt-5 rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 text-sm">Suggestion applied.<button type="button" onClick={() => { void replaceBlocks(undoBlocks); setUndoBlocks(null); }} className="ml-3 font-semibold text-amber underline">Undo</button><button type="button" onClick={() => setUndoBlocks(null)} className="ml-3 text-muted">Dismiss</button></div>}
+          <section className="mt-5 rounded-2xl border border-line bg-surface p-5">
+            <h2 className="font-display text-lg font-semibold">Back up your data</h2>
+            <p className="mt-1 text-xs text-muted">Download a copy before changing devices or clearing browser storage.</p>
+            <div className="mt-3 flex gap-2"><button type="button" onClick={() => exportData("json")} className="rounded-lg border border-line px-3 py-2 text-xs font-semibold">Export JSON</button><button type="button" onClick={() => exportData("csv")} className="rounded-lg border border-line px-3 py-2 text-xs font-semibold">Export CSV</button></div>
+          </section>
           <section className="mt-5 rounded-2xl border border-line bg-surface p-5">
             <h2 className="font-display text-lg font-semibold">Routine insights</h2>
             <Suggestions tips={routineTips} />
@@ -144,6 +190,7 @@ export function Dashboard({ userEmail, userId }: { userEmail?: string; userId?: 
         </div>
       )}
       <footer className="mt-8 text-center text-xs text-muted">{userEmail ? "Your signed-in data syncs securely across devices." : "Data stays on this device only."}</footer>
+      <Assistant onNavigate={(target) => document.getElementById(target)?.scrollIntoView({ behavior: "smooth" })} />
     </div>
   );
 }

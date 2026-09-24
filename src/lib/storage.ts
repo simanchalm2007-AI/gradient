@@ -121,6 +121,18 @@ export function useDayRecord(userId?: string) {
     [update],
   );
 
+  const updateBlock = useCallback(
+    (id: string, patch: Partial<Omit<ScheduleBlock, "id">>) => {
+      update((d) => ({ ...d, blocks: d.blocks.map((block) => block.id === id ? { ...block, ...patch } : block) }));
+    },
+    [update],
+  );
+
+  const replaceBlocks = useCallback(
+    (blocks: ScheduleBlock[]) => update((d) => ({ ...d, blocks })),
+    [update],
+  );
+
   const saveCheckin = useCallback(
     (checkin: CheckIn) => {
       update((d) => ({ ...d, checkin }));
@@ -160,6 +172,11 @@ export function useDayRecord(userId?: string) {
     [update],
   );
 
+  const updateImport = useCallback(
+    (id: string, blocks: ImportedEntry["blocks"]) => update((d) => ({ ...d, imports: (d.imports ?? []).map((entry) => entry.id === id ? { ...entry, blocks } : entry) })),
+    [update],
+  );
+
   /** Consecutive days ending today where every scheduled block was completed. */
   const streak = useCallback((): number => {
     let count = 0;
@@ -178,5 +195,5 @@ export function useDayRecord(userId?: string) {
   }, [db]);
 
   const imports = Object.values(db).flatMap((record) => record.imports ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, streak, saveState, retrySave };
+  return { day, imports, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, streak, saveState, retrySave };
 }
