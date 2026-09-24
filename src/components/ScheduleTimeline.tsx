@@ -46,7 +46,7 @@ function TimelineRow({ block: b, onToggle, onDelete, onEdit, imports, onApplySug
           </div>
         ) : (
           <>
-            <div className={`text-sm font-medium ${b.done ? "text-muted line-through" : ""}`}>{b.title}</div>
+            <div className={`text-sm font-medium ${b.done ? "text-muted line-through" : ""}`}>{b.title}<span className="ml-2 rounded-full bg-amber/10 px-2 py-0.5 text-[10px] text-amber">{b.category === "personal" ? "Personal" : "College"}</span></div>
             <div className="mt-0.5 text-xs text-muted">{formatTime(b.start)} – {formatTime(b.end)} · {formatDuration(durationMinutes(b.start, b.end))} · {TYPE_LABEL[b.type]}</div>
           </>
         )}

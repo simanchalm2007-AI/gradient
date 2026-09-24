@@ -80,6 +80,15 @@ export function useDayRecord(userId?: string) {
   const lastUpdate = useRef<((d: DayRecord) => DayRecord) | null>(null);
   const key = localDayKey();
   const day = db[key] ?? emptyDay();
+  const activityHistory = Object.entries(db)
+    .map(([date, record]) => ({
+      date,
+      rating: record.blocks.length
+        ? Math.max(0, Math.min(100, Math.round((record.blocks.filter((block) => block.done).length / record.blocks.length) * 100)))
+        : 0,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-7);
 
   useEffect(() => {
     if (!userId || !supabase) return;
@@ -278,5 +287,5 @@ export function useDayRecord(userId?: string) {
 
   const imports = Object.values(db).flatMap((record) => record.imports ?? []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const attendanceRecords = Object.values(db).flatMap((record) => record.attendance ?? []);
-  return { day, imports, attendanceRecords, timetable: academic.timetable, attendanceTarget: academic.target, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, addTimetableEntry, deleteTimetableEntry, archiveTimetableEntry, setAttendance, setAttendanceTarget, streak, saveState, retrySave };
+  return { day, imports, activityHistory, attendanceRecords, timetable: academic.timetable, attendanceTarget: academic.target, addBlock, addBlocks, toggleBlock, deleteBlock, updateBlock, replaceBlocks, saveCheckin, addReminder, deleteReminder, addImport, deleteImport, updateImport, addTimetableEntry, deleteTimetableEntry, archiveTimetableEntry, setAttendance, setAttendanceTarget, streak, saveState, retrySave };
 }

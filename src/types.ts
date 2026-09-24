@@ -1,4 +1,5 @@
 export type BlockType = "study" | "break" | "exercise" | "sleep";
+export type TaskCategory = "college" | "personal";
 
 export interface ScheduleBlock {
   id: string;
@@ -7,6 +8,7 @@ export interface ScheduleBlock {
   end: string; // "HH:MM"
   type: BlockType;
   done: boolean;
+  category?: TaskCategory;
 }
 
 export type DraftBlock = Omit<ScheduleBlock, "id" | "done"> & { uncertain?: boolean };
@@ -15,7 +17,6 @@ export interface CheckIn {
   sleepHours?: number;
   exercised?: "yes" | "no";
   stepCount?: number;
-  healthSource?: "apple-health" | "health-connect";
 }
 
 export interface Reminder {

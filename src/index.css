@@ -78,3 +78,47 @@ section {
 button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
+
+@media (min-width: 1024px) {
+  .timetable-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+
+
+.chart-grid-line {
+  stroke: var(--color-line);
+  stroke-opacity: 0.45;
+  stroke-dasharray: 4 5;
+}
+
+.chart-line {
+  stroke: var(--color-amber);
+}
+
+.chart-point {
+  fill: var(--color-amber);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.desktop-feature-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 1100px) {
+  .desktop-feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .desktop-feature-grid > section {
+    margin-top: 0;
+  }
+
+  .desktop-feature-grid > section:first-child {
+    grid-column: 1 / -1;
+  }
+}

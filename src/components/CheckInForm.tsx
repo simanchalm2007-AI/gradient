@@ -10,20 +10,13 @@ export function CheckInForm({ value, onSave }: CheckInFormProps) {
   const [sleep, setSleep] = useState(value.sleepHours?.toString() ?? "");
   const [exercised, setExercised] = useState<"" | "yes" | "no">(value.exercised ?? "");
   const [steps, setSteps] = useState(value.stepCount?.toString() ?? "");
-  const [healthSource, setHealthSource] = useState<CheckIn["healthSource"]>(value.healthSource);
-  const [healthMessage, setHealthMessage] = useState("");
 
   const inputClass = "w-full rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-sm text-ink outline-none focus:outline-2 focus:outline-amber";
-  function connectHealth(source: NonNullable<CheckIn["healthSource"]>) {
-    setHealthSource(source);
-    setHealthMessage("Connected for this preview. A native iOS/Android wrapper is required to read real health data.");
-  }
   function save() {
     onSave({
       sleepHours: sleep === "" ? undefined : Number(sleep),
       exercised: exercised || undefined,
       stepCount: steps === "" ? undefined : Number(steps),
-      healthSource,
     });
   }
 
@@ -44,15 +37,7 @@ export function CheckInForm({ value, onSave }: CheckInFormProps) {
           <label className="mb-1 block text-xs text-muted">Steps today</label>
           <input type="number" min={0} value={steps} onChange={(e) => setSteps(e.target.value)} placeholder="Manual entry" className={inputClass} />
         </div>
-        <div>
-          <span className="mb-1 block text-xs text-muted">Connect health app</span>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => connectHealth("apple-health")} className={`rounded-lg border px-2 py-2 text-xs ${healthSource === "apple-health" ? "border-amber text-amber" : "border-line text-muted"}`}>Apple Health</button>
-            <button type="button" onClick={() => connectHealth("health-connect")} className={`rounded-lg border px-2 py-2 text-xs ${healthSource === "health-connect" ? "border-amber text-amber" : "border-line text-muted"}`}>Health Connect</button>
-          </div>
-        </div>
       </div>
-      {healthMessage && <p className="mt-2 text-xs text-muted">{healthMessage}</p>}
       <button type="button" onClick={save} className="mt-3 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink hover:border-muted">Save check-in</button>
     </div>
   );
